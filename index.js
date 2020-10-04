@@ -39,7 +39,7 @@ router.get('/mail/config-v1.1.xml', function *autoconfig() {
 	this.set('Content-Type', 'application/xml');
 	let domain = settings.provider;
 	try {
-		const url = new URL(this.request.headers.host);
+		const url = new URL(this.href);
 		if (!IPREGEX.test(url.hostname)) {
 			domain = url.hostname.replace(/^autoconfig\.|^autodiscover\./, '');
 		}
