@@ -1,6 +1,6 @@
 # autodiscover-email-settings
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/weboaks/autodiscover-email-settings.svg)](https://hub.docker.com/r/weboaks/autodiscover-email-settings/) [![Docker layers](https://images.microbadger.com/badges/image/weboaks/autodiscover-email-settings.svg)](https://microbadger.com/images/weboaks/autodiscover-email-settings)
+[![Docker Pulls](https://img.shields.io/docker/pulls/zikeji/autodiscover-email-settings.svg)](https://hub.docker.com/r/weboaks/autodiscover-email-settings/) [![Docker layers](https://images.microbadger.com/badges/image/zikeji/autodiscover-email-settings.svg)](https://microbadger.com/images/weboaks/autodiscover-email-settings)
 
 This service is created to autodiscover your provider email settings.
 
@@ -11,22 +11,20 @@ It provides IMAP/SMTP Autodiscover capabilities on Microsoft Outlook/Apple Mail,
 ```
 autoconfig              IN      A      {{$AUTODISCOVER_IP}}
 autodiscover            IN      A      {{$AUTODISCOVER_IP}}
-imap                    IN      CNAME  {{$MX_DOMAIN}}.
-smtp                    IN      CNAME  {{$MX_DOMAIN}}.
-@                       IN      MX 10  {{$MX_DOMAIN}}.
 @                       IN      TXT     "mailconf=https://autoconfig.{{$DOMAIN}}/mail/config-v1.1.xml"
-_imaps._tcp             IN      SRV    0 0 993 {{MX_DOMAIN}}.
-_submission._tcp        IN      SRV    0 0 465 {{MX_DOMAIN}}.
+_imaps._tcp             IN      SRV    0 0 993 {{IMAP_DOMAIN}}.
+_submission._tcp        IN      SRV    0 0 465 {{SMTP_DOMAIN}}.
 _autodiscover._tcp      IN      SRV    0 0 443 autodiscover.{{$DOMAIN}}.
 ```
 
 Replace above variables with data according to this table
 
-| Variable        | Description                         |
-| --------------- | ----------------------------------- |
-| MX_DOMAIN       | The hostname name of your MX server |
-| DOMAIN          | Your apex/bare/naked Domain         |
-| AUTODISCOVER_IP | IP of the Autoconfig HTTP           |
+| Variable        | Description                            |
+| --------------- | -------------------------------------- |
+| AUTODISCOVER_IP | IP of the autoconf server              |
+| DOMAIN          | The domain name of the autoconf server |
+| IMAP_DOMAIN     | The domain name of your IMAP server    |
+| SMTP_DOMAIN     | The domain name of your SMTP server    |
 
 ---
 
@@ -34,23 +32,32 @@ Replace above variables with data according to this table
 
 [traefik](https://github.com/containous/traefik) can proxy your containers on docker, on docker swarm, and on a wide range of orchestrators
 
+Checks the Host header to populate the domain in the config, making it usable for deploying on multiple domains that all have a single IMAP/SMTP endpoint. Fallsback to the PROVIDER environment variable if no host header is found.
+
 #### docker
 
 ```yaml
 version: '2'
 
 services:
-  autodiscover-domain-com:
-    image: weboaks/autodiscover-email-settings:latest
+  autodiscover:
+    image: zikeji/autodiscover-email-settings:latest
     environment:
-    - DOMAIN=domain.com
+    - PROVIDER=domain.com
     - IMAP_HOST=imap.domain.com
     - IMAP_PORT=993
     - SMTP_HOST=smtp.domain.com
     - SMTP_PORT=465
+    restart: unless-stopped
     labels:
-      - "traefik.port=8000"
-      - "traefik.frontend.rule=Host:autoconfig.domain.com,autodiscover.domain.com"
+      - "traefik.enable=true"
+      - "traefik.http.services.autodiscover.loadbalancer.server.port=8000"
+      - "traefik.http.routers.autodiscover.entrypoints=http"
+      - "traefik.http.routers.autodiscover.rule=Host(`autodiscover.domain.com`) || Host(`autoconfig.domain.com`)"
+      - "traefik.http.routers.autodiscover-secure.entrypoints=https"
+      - "traefik.http.routers.autodiscover-secure.rule=Host(`autodiscover.domain.com`) || Host(`autoconfig.domain.com`)"
+      - "traefik.http.routers.autodiscover-secure.tls=true"
+      - "traefik.http.routers.autodiscover-secure.tls.certresolver=http"
 ```
 
 #### docker swarm
@@ -60,9 +67,9 @@ version: '3'
 
 services:
   autodiscover-domain-com:
-    image: weboaks/autodiscover-email-settings:latest
+    image: zikeji/autodiscover-email-settings:latest
     environment:
-    - DOMAIN=domain.com
+    - PROVIDER=domain.com
     - IMAP_HOST=imap.domain.com
     - IMAP_PORT=993
     - SMTP_HOST=smtp.domain.com
@@ -70,13 +77,19 @@ services:
     deploy:
       replicas: 1
       labels:
-        - "traefik.port=8000"
-        - "traefik.frontend.rule=Host:autoconfig.domain.com,autodiscover.domain.com"
+        - "traefik.enable=true"
+        - "traefik.http.services.autodiscover.loadbalancer.server.port=8000"
+        - "traefik.http.routers.autodiscover.entrypoints=http"
+        - "traefik.http.routers.autodiscover.rule=Host(`autodiscover.domain.com`) || Host(`autoconfig.domain.com`)"
+        - "traefik.http.routers.autodiscover-secure.entrypoints=https"
+        - "traefik.http.routers.autodiscover-secure.rule=Host(`autodiscover.domain.com`) || Host(`autoconfig.domain.com`)"
+        - "traefik.http.routers.autodiscover-secure.tls=true"
+        - "traefik.http.routers.autodiscover-secure.tls.certresolver=http"
 ```
 
 ### Credits
 
-Inspired from https://github.com/johansmitsnl/docker-email-autodiscover, but with https://github.com/Tiliq/autodiscover.xml instead of https://github.com/gronke/email-autodiscover to allow a much lighter ([![](https://images.microbadger.com/badges/image/weboaks/autodiscover-email-settings.svg)](https://microbadger.com/images/weboaks/autodiscover-email-settings)) image based of node on alpine instead of apache on debian ([![](https://images.microbadger.com/badges/image/jsmitsnl/docker-email-autodiscover.svg)](https://microbadger.com/images/jsmitsnl/docker-email-autodiscover))
+Spinoff of [autodiscover.xml](https://github.com/sylvaindumont/autodiscover.xml#credits) by [sylvaindumont](https://github.com/sylvaindumont/).
 
 ### Notes
 
@@ -84,7 +97,6 @@ The above autoconfiguration methods assume the following:
 
 * Username: `{{email}}` (Entire email address)
 * Encryption: SSL/TLS
-  .
 
 ### License
 
